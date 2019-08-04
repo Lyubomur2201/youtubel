@@ -1,0 +1,39 @@
+{
+  "name": "youtubel",
+  "version": "1.0.0",
+  "description": "youtubel",
+  "main": "index.js",
+  "scripts": {
+    "tsc": "tsc",
+    "postinstall": "npm run tsc",
+    "start:prod": "node build/index.js",
+    "start:dev": "NODE_ENV=DEV nodemon src/index.ts",
+    "start:debug": "NODE_ENV=DEBUG nodemon --inspect-brk src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lyubomur2201/youtubel.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Lyubomur2201/youtubel/issues"
+  },
+  "homepage": "https://github.com/Lyubomur2201/youtubel#readme",
+  "devDependencies": {
+    "@types/dotenv": "^6.1.1",
+    "@types/randomstring": "^1.1.6",
+    "@types/youtube-dl": "^1.12.2",
+    "dotenv": "^8.0.0",
+    "nodemon": "^1.19.1",
+    "ts-node": "^8.3.0",
+    "typescript": "^3.5.3"
+  },
+  "dependencies": {
+    "randomstring": "^1.1.5",
+    "telegraf": "^3.32.0",
+    "telegraf-command-parts": "^1.0.3",
+    "youtube-dl": "^2.0.0"
+  }
+}
