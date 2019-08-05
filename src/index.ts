@@ -5,18 +5,21 @@ import { config } from "dotenv";
 import commandParts from "telegraf-command-parts";
 import { replyWithAudio } from "./utils";
 
+import { createServer } from "http";
+import express from "express";
+
 const youtubeRegEx = /^((?:https?:)?\/\/)?((?:www|m)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$/g;
 
 config();
 
-const telegraf = new Telegraf(process.env.BOT_TOKEN || "");
+const bot = new Telegraf(process.env.BOT_TOKEN || "");
 
-telegraf.use(commandParts());
-telegraf.start(async ctx => {
+bot.use(commandParts());
+bot.start(async ctx => {
   ctx.reply("Hello new user.");
 });
 
-telegraf.command(
+bot.command(
   "/link",
   (ctx, next) => {
     // @ts-ignore
@@ -32,7 +35,7 @@ telegraf.command(
   replyWithAudio
 );
 
-telegraf.command(
+bot.command(
   "/id",
   (ctx, next) => {
     //@ts-ignore
@@ -48,7 +51,7 @@ telegraf.command(
   replyWithAudio
 );
 
-telegraf.hears(
+bot.hears(
   youtubeRegEx,
   (ctx, next) => {
     //@ts-ignore
@@ -58,18 +61,22 @@ telegraf.hears(
   replyWithAudio
 );
 
-telegraf.use(ctx => {
+bot.use(ctx => {
   ctx.reply("Sorry this massage is not supported.");
 });
 
+const startBot = () => {
+  const server = createServer(express().use((req, res) => res.status(200)));
+  server.listen(process.env.PORT, () => {
+    bot.launch();
+  });
+};
+
 fs.exists("assets/audio", exists => {
-  if (exists) {
-    telegraf.launch();
-  } else {
+  if (exists) startBot();
+  else {
     fs.mkdir("assets/audio", error => {
-      if (error === null) {
-        telegraf.launch();
-      }
+      if (error === null) startBot();
     });
   }
 });
