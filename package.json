@@ -21,19 +21,19 @@
     "url": "https://github.com/Lyubomur2201/youtubel/issues"
   },
   "homepage": "https://github.com/Lyubomur2201/youtubel#readme",
-  "devDependencies": {
-    "@types/dotenv": "^6.1.1",
-    "@types/randomstring": "^1.1.6",
-    "@types/youtube-dl": "^1.12.2",
-    "dotenv": "^8.0.0",
-    "nodemon": "^1.19.1",
-    "ts-node": "^8.3.0",
-    "typescript": "^3.5.3"
-  },
   "dependencies": {
+    "dotenv": "^8.0.0",
     "randomstring": "^1.1.5",
     "telegraf": "^3.32.0",
     "telegraf-command-parts": "^1.0.3",
     "youtube-dl": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/dotenv": "^6.1.1",
+    "@types/randomstring": "^1.1.6",
+    "@types/youtube-dl": "^1.12.2",
+    "nodemon": "^1.19.1",
+    "ts-node": "^8.3.0",
+    "typescript": "^3.5.3"
   }
 }
