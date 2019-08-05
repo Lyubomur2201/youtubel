@@ -1,17 +1,11 @@
 import fs from "fs";
 import Telegraf from "telegraf";
-import youtubedl from "youtube-dl";
 import { config } from "dotenv";
-import { generate } from "randomstring";
 //@ts-ignore
 import commandParts from "telegraf-command-parts";
+import { replyWithAudio } from "./utils";
 
-interface AudioInfo {
-  videoId?: string;
-  duration?: number;
-  performer?: string;
-  name?: string;
-}
+const youtubeRegEx = /^((?:https?:)?\/\/)?((?:www|m)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$/g;
 
 config();
 
@@ -19,70 +13,63 @@ const telegraf = new Telegraf(process.env.BOT_TOKEN || "");
 
 telegraf.use(commandParts());
 telegraf.start(async ctx => {
-  ctx.reply("Hello new user");
+  ctx.reply("Hello new user.");
 });
 
-telegraf.command("/link", ctx => {
-  // @ts-ignore
-  const url = ctx.state.command.args;
-
-  if (url.length === 0) {
-    ctx.reply("No link provided");
-  } else {
-    let video = youtubedl(url, ["--audio-format", "mp3"], { cwd: __dirname });
-    let audioInfo: AudioInfo = {
-      videoId: generate(16)
-    };
-
-    video.on("info", function(info) {
-      let name = info._filename;
-      let nameArray = name.split("-");
-      if (nameArray.length === 2) {
-        audioInfo = {
-          name: nameArray[1],
-          performer: nameArray[0]
-        };
-      } else {
-        name = nameArray.join("-");
-        audioInfo = {
-          name
-        };
-      }
-      audioInfo.duration = Number(info._duration_raw);
-
-      console.log("Download started");
-      console.log("filename: " + info._filename);
-      console.log("size: " + info.size);
-    });
+telegraf.command(
+  "/link",
+  (ctx, next) => {
+    // @ts-ignore
+    ctx.state.url = ctx.state.command.args;
 
     //@ts-ignore
-    video.on("error", (info: Error) => {
-      if (info.message.includes("This playlist is private")) {
-        ctx.reply("This playlist is private.");
-        ctx.replyWithSticker({ source: "assets/stickers/ThisIsFine.tgs" });
-      } else {
-        ctx.reply("Sorry we can't get audio from that video.");
-        ctx.replyWithSticker({ source: "assets/stickers/ThisIsNotFine.tgs" });
+    if (ctx.state.url.length === 0) {
+      ctx.reply("No link provided.");
+    } else {
+      next!();
+    }
+  },
+  replyWithAudio
+);
+
+telegraf.command(
+  "/id",
+  (ctx, next) => {
+    //@ts-ignore
+    if (ctx.state.command.args.length === 0) {
+      ctx.reply("No id provided.");
+    } else {
+      //@ts-ignore
+      ctx.state.url = "https://youtu.be/" + ctx.state.command.args;
+
+      next!();
+    }
+  },
+  replyWithAudio
+);
+
+telegraf.hears(
+  youtubeRegEx,
+  (ctx, next) => {
+    //@ts-ignore
+    ctx.state.url = ctx.message!.text;
+    next!();
+  },
+  replyWithAudio
+);
+
+telegraf.use(ctx => {
+  ctx.reply("Sorry this massage is not supported.");
+});
+
+fs.exists("assets/audio", exists => {
+  if (exists) {
+    telegraf.launch();
+  } else {
+    fs.mkdir("assets/audio", error => {
+      if (error === null) {
+        telegraf.launch();
       }
-    });
-
-    let audioStream = fs.createWriteStream(
-      "assets/audio/" + (audioInfo.videoId || "default") + ".mp3"
-    );
-
-    video.pipe(audioStream);
-
-    audioStream.on("close", async () => {
-      await ctx.replyWithAudio(
-        { source: "assets/audio/" + (audioInfo.videoId || "default") + ".mp3" },
-        {
-          title: audioInfo!.name,
-          performer: audioInfo.performer,
-          duration: audioInfo.duration
-        }
-      );
     });
   }
 });
-
-telegraf.launch();
