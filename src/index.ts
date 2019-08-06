@@ -15,8 +15,14 @@ config();
 const bot = new Telegraf(process.env.BOT_TOKEN || "");
 
 bot.use(commandParts());
+// Files over 50 MB are split into parts due to Telegram Bot API limit.
 bot.start(async ctx => {
-  ctx.reply("Hello new user.");
+  ctx.replyWithMarkdown(
+    "Hi! I download and send audios from Youtube videos in MP3.\n" +
+      "Send me a link to Youtube video and i will send you audio from it.\n" +
+      "[🌟 Star me on GitHub!](https://github.com/Lyubomur2201/youtubel) | [⚠️ Report an issue](https://github.com/Lyubomur2201/youtubel/issues)\n" +
+      "👨🏻‍💻 Developed by *@lyubomyr_2201*"
+  );
 });
 
 bot.command(

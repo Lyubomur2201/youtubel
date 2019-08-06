@@ -23,7 +23,7 @@ export const replyWithAudio = async (ctx: ContextMessageUpdate) => {
 
   video.on("info", function(info) {
     let name = info._filename;
-    let nameArray = name.split("-");
+    let nameArray = name.split("-").map(item => item.replace("_", " "));
 
     nameArray.pop();
 
