@@ -1,16 +1,16 @@
 import fs from "fs";
 import Telegraf from "telegraf";
-import { config } from "dotenv";
+import "dotenv/config";
+
 //@ts-ignore
 import commandParts from "telegraf-command-parts";
 import { replyWithAudio } from "./utils";
 
 import { createServer } from "http";
 import express from "express";
+import axios from "axios";
 
 const youtubeRegEx = /^((?:https?:)?\/\/)?((?:www|m)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$/g;
-
-config();
 
 const bot = new Telegraf(process.env.BOT_TOKEN || "");
 
@@ -20,7 +20,8 @@ bot.start(async ctx => {
   ctx.replyWithMarkdown(
     "Hi! I download and send audios from Youtube videos in MP3.\n" +
       "Send me a link to Youtube video and i will send you audio from it.\n" +
-      "[🌟 Star me on GitHub!](https://github.com/Lyubomur2201/youtubel) | [⚠️ Report an issue](https://github.com/Lyubomur2201/youtubel/issues)\n" +
+      "[🌟 Star me on GitHub!](https://github.com/Lyubomur2201/youtubel) | " +
+      "[⚠️ Report an issue](https://github.com/Lyubomur2201/youtubel/issues)\n" +
       "👨🏻‍💻 Developed by *@lyubomyr_2201*"
   );
 });
@@ -72,10 +73,19 @@ bot.use(ctx => {
 });
 
 const startBot = () => {
-  const server = createServer(express().use((req, res) => res.status(200)));
+  const server = createServer(
+    express().use((req, res) => res.status(200).end())
+  );
   server.listen(process.env.PORT, () => {
     bot.launch();
   });
+  setInterval(() => {
+    try {
+      axios.get("https://youtubel-bot.herokuapp.com/");
+    } catch (e) {
+      console.log(e);
+    }
+  }, 1000 * 60);
 };
 
 fs.exists("assets/audio", exists => {
