@@ -27,3 +27,5 @@ build
 node_modules
 .env
 .vscode
+.idea
+assets/audio
