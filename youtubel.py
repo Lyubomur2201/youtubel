@@ -101,7 +101,11 @@ def handler(func):
 @handler
 def start(update, context: callbackcontext, user, chat, message, _user):
     context.bot.send_message(chat_id=update.effective_chat.id,
-                             text=f"I'm a bot, please {update.message.from_user.username} talk to me!")
+                             text="Hi! I download and send audios from Youtube videos in MP3.\n\n" +
+                                  "Send me a 🔗link to Youtube video and i will send you audio from it.\n\n" +
+                                  # "[🌟 Star me on GitHub!](https://github.com/Lyubomur2201/youtubel) | " +
+                                  # "[⚠️ Report an issue](https://github.com/Lyubomur2201/youtubel/issues)\n" +
+                                  "👨🏻‍💻 Developed by *@lyubomyr_2201*", parse_mode=telegram.ParseMode.MARKDOWN)
 
 
 def downloaded_audio_from_video(update, context, user, chat, message, _user: User, video_url):
