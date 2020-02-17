@@ -1,7 +1,9 @@
 from __future__ import unicode_literals
 import youtube_dl
-from telegram.ext import Updater, CommandHandler, callbackcontext, MessageHandler, Filters
-from telegram import ChatAction, Update, User
+from telegram.ext import Updater, CommandHandler, callbackcontext, MessageHandler, Filters, messagequeue, CallbackQueryHandler
+from telegram import ChatAction, Update, User, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.utils.request import Request
+import telegram.bot
 import re
 import os
 import logging
@@ -40,20 +42,41 @@ youtube_regex = (
     '(youtube|youtu|youtube-nocookie)\.(com|be)/'
     '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})')
 
-updater = Updater(token=os.environ.get("BOT_TOKEN"), use_context=True)
-dispatcher = updater.dispatcher
+youtube_playlist_regex = '(https?://)?(www\.)?(?:youtube\.com.*(?:\?|&)(?:list)=)((?!videoseries)[a-zA-Z0-9_]*)'
 
-ydl_opts = {
+
+ydl_video_opts = {
     'format': 'bestaudio/best',
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
         'preferredcodec': 'mp3',
         'preferredquality': '192',
     }],
+    'max_filesize': 50_000_000,
     'outtmpl': "assets/audio/%(id)s.%(ext)s",
     'progress_hooks': [my_hook],
     'logger': MyLogger()
 }
+
+
+class MQBot(telegram.bot.Bot):
+    '''A subclass of Bot which delegates send method handling to MQ'''
+    def __init__(self, *args, is_queued_def=True, mqueue=None, **kwargs):
+        super(MQBot, self).__init__(*args, **kwargs)
+        # below 2 attributes should be provided for decorator usage
+        self._is_messages_queued_default = is_queued_def
+        self._msg_queue = mqueue or messagequeue.MessageQueue()
+
+    def __del__(self):
+        try:
+            self._msg_queue.stop()
+        except:
+            pass
+
+    @messagequeue.queuedmessage
+    def send_message(self, *args, **kwargs):
+
+        return super(MQBot, self).send_message(*args, **kwargs)
 
 
 def handler(func):
@@ -69,7 +92,6 @@ def handler(func):
                 'downloads': []
             }
             users.insert_one(user)
-        print(user)
         chat = update.effective_chat
         message = update.message
         return func(update, context, user=user, chat=chat, message=message, _user=_user, *args, **kwargs)
@@ -82,32 +104,31 @@ def start(update, context: callbackcontext, user, chat, message, _user):
                              text=f"I'm a bot, please {update.message.from_user.username} talk to me!")
 
 
-@handler
-def youtube_link(update, context: callbackcontext, user, chat, message, _user, *args, **kwargs):
-    video_url = message.text
+def downloaded_audio_from_video(update, context, user, chat, message, _user: User, video_url):
+    print(user)
     try:
+        video_id = re.match(
+            '^.*(?:(?:youtu\.be\/|v\/|vi\/|u\/\w\/|embed\/)|(?:(?:watch)?\?v(?:i)?=|\&v(?:i)?=))([^#\&\?]*).*',
+            video_url)[1]
+        video_url = f'http://youtu.be/{video_id}'
 
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        if (video := downloaded_audios.find_one({'_id': video_id})) is None:
+            with youtube_dl.YoutubeDL(ydl_video_opts) as ydl:
             info = ydl.extract_info(video_url, False)
-            # thumbnail_path = prepare_thumbnail('/'.join(info['thumbnail'].split('/')[0: -1]) + '/maxresdefault.jpg')
             raw_title = info['title']
             video_id = info['id']
-            ydl.download([video_url])
-            print(info)
-            performer, title = None, None
+                ydl.download([video_url])
+                performer, title = info['uploader'], raw_title
             if len((temp := raw_title.split("-"))) == 2:
                 performer = temp[0]
                 title = temp[1]
 
-        context.bot.send_chat_action(chat_id=user['_id'], action=ChatAction.UPLOAD_DOCUMENT)
-        _user.send_audio(audio=open(f"assets/audio/{video_id}.mp3", 'rb'),
-                         performer=performer if performer is not None else None,
-                         title=title if title is not None else raw_title)
-
-        users.update_one({'_id': user['_id']}, {'$push': {'downloads': video_id}})
-
-        if (video := downloaded_audios.find_one({'_id': info['id']})) is None:
-            video = downloaded_audios.insert_one({
+                audio = open(f"assets/audio/{video_id}.mp3", 'rb')
+                context.bot.send_chat_action(chat_id=chat.id, action=ChatAction.UPLOAD_DOCUMENT)
+                sent_doc = _user.send_audio(audio, duration=info['duration'], performer=performer,
+                                            title=title, caption="@youtubel_bot")
+                audio_id = sent_doc['audio']['file_id']
+                downloaded_audios.insert_one({
                 '_id': info['id'],
                 'uploader': info['uploader'],
                 'uploader_id': info['uploader_id'],
@@ -118,35 +139,36 @@ def youtube_link(update, context: callbackcontext, user, chat, message, _user, *
                 'title': info['title'],
                 'thumbnail': info['thumbnail'],
                 'tags': info['tags'],
-                'view_count': info['view_count'],
-                'like_count': info['like_count'],
-                'dislike_count': info['dislike_count']
+                    'audio_id': audio_id,
             })
         else:
-            downloaded_audios.update_one({"_id": video['_id']}, {'$set': {
-                'license': info['license'],
-                'creator': info['creator'],
-                'title': info['title'],
-                'thumbnail': info['thumbnail'],
-                'tags': info['tags'],
-                'view_count': info['view_count'],
-                'like_count': info['like_count'],
-                'dislike_count': info['dislike_count']
-            }})
+            audio_id = video['audio_id']
+            context.bot.send_chat_action(chat_id=chat.id, action=ChatAction.UPLOAD_DOCUMENT)
+            _user.send_document(document=audio_id, caption="@youtubel_bot")
 
-        context.bot.delete_message(chat_id=user['_id'], message_id=message.message_id)
-    except youtube_dl.utils.DownloadError as e:
-        if "This playlist is private" in str(e):
-            context.bot.send_message(chat_id=chat.id, text="Sorry, this playlist is private")
+        if video_id not in user['downloads']:
+            users.update_one({'_id': user['_id']}, {'$push': {'downloads': video_id}})
+
+        context.bot.delete_message(chat_id=chat.id, message_id=message.message_id)
+    except FileNotFoundError and OSError:
+        context.bot.send_message(chat_id=chat.id, text="We could`nt get audio from this video, maybe its too big",
+                                 reply_to_message_id=message.message_id)
             context.bot.send_sticker(chat_id=chat.id,
                                      sticker=open('assets/stickers/ThisIsFine.tgs', 'rb'))
-
     finally:
         try:
             os.remove(f"assets/audio/{video_id}.mp3")
         except UnboundLocalError:
             pass
+        except FileNotFoundError:
+            pass
 
+
+@handler
+def youtube_link(update, context: callbackcontext, user, chat, message, _user, *args, **kwargs):
+    video_url = message.text
+    downloaded_audio_from_video(update=update, context=context, user=user, chat=chat,
+                                message=message, _user=_user, video_url=video_url)
 
 # def prepare_thumbnail(thumbnail_url):
 #     print(thumbnail_url)
@@ -160,15 +182,67 @@ def youtube_link(update, context: callbackcontext, user, chat, message, _user, *
 #     # resized = cv2.resize(image, dim, interpolation=cv2.INTER_AREA)
 #     # cv2.imwrite(thumbnail_path, resized)
 #     return thumbnail_path
+#
+#
+# ydl_playlist_opts = {
+#     'format': 'bestaudio/best',
+#     'postprocessors': [{
+#         'key': 'FFmpegExtractAudio',
+#         'preferredcodec': 'mp3',
+#         'preferredquality': '192',
+#     }],
+#     'dump_single_json': True,
+#     'extract_flat': True,
+#     'ignoreerrors': True,
+#     'outtmpl': "assets/audio/%(id)s.%(ext)s",
+#     'progress_hooks': [my_hook],
+#     'logger': MyLogger()
+# }
+#
+#
+# @handler
+# def youtube_playlist(update, context, user, chat, message, _user: User):
+#     playlist_url = message.text
+#     info = youtube_dl.YoutubeDL(ydl_playlist_opts).extract_info(playlist_url, False)
+#     for entry in info['entries']:
+#         if entry['_type'] == 'url':
+#             keyboard = [[InlineKeyboardButton('Download', callback_data=f"DOWNLOAD:{entry['id']}")],
+#                         [InlineKeyboardButton('Delete', callback_data='DELETE')]]
+#             markup = InlineKeyboardMarkup(keyboard)
+#             _user.send_message(text=entry['title'], reply_markup=markup)
 
 
 @handler
 def unknown(update, context, user, chat, message, _user):
     _user.send_message(text="Unknown message")
-    # _user.send_sticker(sticker=open('assets/stickers/ThisIsFine.tgs', 'rb'))
 
+
+# @handler
+# def video_markup_callback(update: Update, context, user, chat, message, _user):
+#     query: telegram.CallbackQuery = update.callback_query
+#     if query.data == 'DELETE':
+#         context.bot.delete_message(chat_id=chat.id, message_id=query.message.message_id)
+#     elif query.data.startswith("DOWNLOAD:"):
+#         video_id = query.data[9:]
+#         video_url = f'http://youtu.be/{video_id}'
+#         downloaded_audio_from_video(update=update, context=context, user=user, video_url=video_url,
+#                                     chat=chat, message=query.message, _user=_user)
+
+
+if __name__ == '__main__':
+    try:
+
+        q = messagequeue.MessageQueue(all_burst_limit=20, all_time_limit_ms=1100)
+        request = Request(con_pool_size=8)
+        bot = MQBot(os.environ.get("BOT_TOKEN"), request=request, mqueue=q)
+        updater = Updater(bot=bot, use_context=True)
+        dispatcher = updater.dispatcher
 
 dispatcher.add_handler(CommandHandler("start", start))
 dispatcher.add_handler(MessageHandler(Filters.regex(re.compile(youtube_regex)), youtube_link))
+        # dispatcher.add_handler(MessageHandler(Filters.regex(re.compile(youtube_playlist_regex)), youtube_playlist))
+        # updater.dispatcher.add_handler(CallbackQueryHandler(video_markup_callback))
 dispatcher.add_handler(MessageHandler(Filters.all, unknown))
 updater.start_polling()
+    except telegram.error.TimedOut:
+        print("TIMEOUT!!!")
