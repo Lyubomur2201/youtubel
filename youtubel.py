@@ -10,6 +10,7 @@ import logging
 from functools import wraps
 from pymongo import MongoClient
 from pymongo.collection import Collection
+
 # import urllib.request
 # import cv2
 
@@ -118,14 +119,14 @@ def downloaded_audio_from_video(update, context, user, chat, message, _user: Use
 
         if (video := downloaded_audios.find_one({'_id': video_id})) is None:
             with youtube_dl.YoutubeDL(ydl_video_opts) as ydl:
-            info = ydl.extract_info(video_url, False)
-            raw_title = info['title']
-            video_id = info['id']
+                info = ydl.extract_info(video_url, False)
+                raw_title = info['title']
+                video_id = info['id']
                 ydl.download([video_url])
                 performer, title = info['uploader'], raw_title
-            if len((temp := raw_title.split("-"))) == 2:
-                performer = temp[0]
-                title = temp[1]
+                if len((temp := raw_title.split("-"))) == 2:
+                    performer = temp[0]
+                    title = temp[1]
 
                 audio = open(f"assets/audio/{video_id}.mp3", 'rb')
                 context.bot.send_chat_action(chat_id=chat.id, action=ChatAction.UPLOAD_DOCUMENT)
@@ -133,18 +134,18 @@ def downloaded_audio_from_video(update, context, user, chat, message, _user: Use
                                             title=title, caption="@youtubel_bot")
                 audio_id = sent_doc['audio']['file_id']
                 downloaded_audios.insert_one({
-                '_id': info['id'],
-                'uploader': info['uploader'],
-                'uploader_id': info['uploader_id'],
-                'channel_id': info['channel_id'],
-                'upload_date': info['upload_date'],
-                'license': info['license'],
-                'creator': info['creator'],
-                'title': info['title'],
-                'thumbnail': info['thumbnail'],
-                'tags': info['tags'],
+                    '_id': info['id'],
+                    'uploader': info['uploader'],
+                    'uploader_id': info['uploader_id'],
+                    'channel_id': info['channel_id'],
+                    'upload_date': info['upload_date'],
+                    'license': info['license'],
+                    'creator': info['creator'],
+                    'title': info['title'],
+                    'thumbnail': info['thumbnail'],
+                    'tags': info['tags'],
                     'audio_id': audio_id,
-            })
+                })
         else:
             audio_id = video['audio_id']
             context.bot.send_chat_action(chat_id=chat.id, action=ChatAction.UPLOAD_DOCUMENT)
@@ -157,8 +158,8 @@ def downloaded_audio_from_video(update, context, user, chat, message, _user: Use
     except FileNotFoundError and OSError:
         context.bot.send_message(chat_id=chat.id, text="We could`nt get audio from this video, maybe its too big",
                                  reply_to_message_id=message.message_id)
-            context.bot.send_sticker(chat_id=chat.id,
-                                     sticker=open('assets/stickers/ThisIsFine.tgs', 'rb'))
+        context.bot.send_sticker(chat_id=chat.id,
+                                 sticker=open('assets/stickers/ThisIsFine.tgs', 'rb'))
     finally:
         try:
             os.remove(f"assets/audio/{video_id}.mp3")
@@ -242,11 +243,11 @@ if __name__ == '__main__':
         updater = Updater(bot=bot, use_context=True)
         dispatcher = updater.dispatcher
 
-dispatcher.add_handler(CommandHandler("start", start))
-dispatcher.add_handler(MessageHandler(Filters.regex(re.compile(youtube_regex)), youtube_link))
+        dispatcher.add_handler(CommandHandler("start", start))
+        dispatcher.add_handler(MessageHandler(Filters.regex(re.compile(youtube_regex)), youtube_link))
         # dispatcher.add_handler(MessageHandler(Filters.regex(re.compile(youtube_playlist_regex)), youtube_playlist))
         # updater.dispatcher.add_handler(CallbackQueryHandler(video_markup_callback))
-dispatcher.add_handler(MessageHandler(Filters.all, unknown))
-updater.start_polling()
+        dispatcher.add_handler(MessageHandler(Filters.all, unknown))
+        updater.start_polling()
     except telegram.error.TimedOut:
         print("TIMEOUT!!!")
