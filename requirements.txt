@@ -1,0 +1,4 @@
+dnspython==1.16.0
+pymongo==3.10.1
+youtube-dl==2020.1.24
+python-telegram-bot==12.4.2
